@@ -11,6 +11,9 @@ import cv2
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import tensorflow as tf
 
+import tensorboard as tb
+tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
+
 def predict(image_data):
 
     predictions = sess.run(softmax_tensor, \
@@ -31,27 +34,39 @@ def predict(image_data):
 
 # Loads label file, strips off carriage return
 label_lines = [line.rstrip() for line
-                   in tf.gfile.GFile("logs/output_labels.txt")]
+                   in tf.io.gfile.GFile("logs/trained_labels.txt", 'r')]
 
 # Unpersists graph from file
-with tf.gfile.FastGFile("logs/output_graph.pb", 'rb') as f:
-    graph_def = tf.GraphDef()
+with tf.io.gfile.GFile("logs/trained_graph.pb", 'rb') as f:
+    graph_def = tf.compat.v1.GraphDef()
     graph_def.ParseFromString(f.read())
     _ = tf.import_graph_def(graph_def, name='')
 
-with tf.Session() as sess:
+import threading
+from program import do_program
+
+sequence:str = ''
+
+# t1 = threading.Thread(target=do_program, args=('hello from do program',))
+# t1.start()
+
+def do_something():
+    print(sequence)
+
+
+with tf.compat.v1.Session() as sess:
     # Feed the image_data as input to the graph and get first prediction
     softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
 
     c = 0
-
+    # global sequence
     cap = cv2.VideoCapture(0)
 
     res, score = '', 0.0
     i = 0
     mem = ''
     consecutive = 0
-    sequence = ''
+    # sequence = ''
     
     while True:
         ret, img = cap.read()
@@ -74,7 +89,7 @@ with tf.Session() as sess:
                     consecutive += 1
                 else:
                     consecutive = 0
-                if consecutive == 2 and res not in ['nothing']:
+                if consecutive == 6 and res not in ['nothing']:
                     if res == 'space':
                         sequence += ' '
                     elif res == 'del':
@@ -88,13 +103,19 @@ with tf.Session() as sess:
             mem = res
             cv2.rectangle(img, (x1, y1), (x2, y2), (255,0,0), 2)
             cv2.imshow("img", img)
-            img_sequence = np.zeros((200,1200,3), np.uint8)
-            cv2.putText(img_sequence, '%s' % (sequence.upper()), (30,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
-            cv2.imshow('sequence', img_sequence)
+            # print(sequence)
+            do_program(sequence)
+            # img_sequence = np.zeros((200,1200,3), np.uint8)
+            # cv2.putText(img_sequence, '%s' % (sequence.upper()), (30,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+            # cv2.imshow('sequence', img_sequence)
             
             if a == 27: # when `esc` is pressed
                 break
 
 # Following line should... <-- This should work fine now
+
+
+# t1.join()
+
 cv2.destroyAllWindows() 
 cv2.VideoCapture(0).release()
